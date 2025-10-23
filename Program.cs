@@ -11,18 +11,11 @@ using System.Text.RegularExpressions;
 using Printer;
 using xUtil.Encoding;
 
-class Program
-{
+class Program {
     static void Main(string[] args) {
-        var encoder = new GenericEncoder(GenericEncoder.EncodingType.Base256, GenericEncoder.EncodingType.Base128);
+        var encoder = new GenericEncoder();
         var temp = new byte[] { 11, 15, 255 };
-        Console.WriteLine("src bytes (8bit):");
-        BitPrinter.PrintBitsArray(temp);
-        var res = encoder.EncodeBytes(temp);
-        Console.WriteLine("dest bytes (6bit):");
-        BitPrinter.PrintBitsArray(res.Item1);
-        var res2 = encoder.DecodeBytes(res.Item1, res.Item2);
-        Console.WriteLine("src bytes decrypted (8bit):");
-        BitPrinter.PrintBitsArray(res2);
+        var decoded64 = encoder.Convert("Hello", GenericEncoder.EncodingType.Base256, GenericEncoder.EncodingType.Base64);
+        Console.WriteLine(decoded64);
     }
 }

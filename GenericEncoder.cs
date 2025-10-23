@@ -1,5 +1,6 @@
-using System;
 using StaticUtil;
+using System;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace xUtil.Encoding {
     public class GenericEncoder {
@@ -13,42 +14,15 @@ namespace xUtil.Encoding {
             Base128 = 128,
             Base256 = 256,
         }
-        protected Dictionary<byte, char> _map64 { get; set; } = new Dictionary<byte, char> { };
-        public Dictionary<byte, char> Map64 { 
-            get {
-                return _map64.ToDictionary();
-            }
-        }
-        
-        protected byte FillDict(Dictionary<byte, char>  map, byte key, int start, int end = 256) {
-            if (end == 256) end = start;
-            int offset = start - key;
-            while (key <= end - offset) {
-                map.Add(key, (char)(key + offset));
-                key++;
-            }
-            return key;
-        }
-        protected void InitDict(Dictionary<byte, char>  map) {
-            byte key = 0;
-            key = FillDict(map, key, (byte)'A', (byte)'Z');
-            key = FillDict(map, key, (byte)'a', (byte)'z');
-            key = FillDict(map, key, (byte)'0', (byte)'9');
-            key = FillDict(map, key, (byte)'+');
-            key = FillDict(map, key, (byte)'/');
+
+        protected BaseMaps _mapper { get; set; }
+        public GenericEncoder() {
+            _mapper = new BaseMaps();
         }
 
-        protected int decodedBitGroupSize = 0; 
-        protected int encodedBitGroupSize = 0; 
-        public GenericEncoder(EncodingType from, EncodingType to) {
-            InitDict(_map64);
-            decodedBitGroupSize = (int)Math.Log((double)from, 2);
-            encodedBitGroupSize = (int)Math.Log((double)to, 2);
-        }
-    
         protected (byte[], int) Execute(byte[] src, int from, int to, int destinationPaddingCount = 0) {
             var ratio = MathUtil.MinRatio(from, to);
-            var paddingCount = (ratio.Item2 - (src.Length % ratio.Item2) ) % ratio.Item2;
+            var paddingCount = (ratio.Item2 - (src.Length % ratio.Item2)) % ratio.Item2;
             var padding = new List<byte>();
             for (var i = 0; i < paddingCount; i++) padding.Add(0);
             var srcBytes = src.Concat(padding).ToArray();
@@ -67,7 +41,7 @@ namespace xUtil.Encoding {
                     srcCounter++;
                 }
 
-                if( bitCount >= to) {
+                if (bitCount >= to) {
                     var move = bitCount - to;
                     destBytes.Add((byte)(buffer >> move));
                     bitCount -= to;
@@ -80,15 +54,29 @@ namespace xUtil.Encoding {
             destBytes = destBytes.Take(destBytes.Count() - destinationPaddingCount).ToList();
             return (destBytes.ToArray(), paddingCount);
         }
-        
-        public byte[] DecodeBytes(byte[] src, int paddingCount) {
-            var result = Execute(src, encodedBitGroupSize, decodedBitGroupSize, paddingCount);
-            return result.Item1;
+
+        public (byte[], int) ConvertBytes(byte[] src, EncodingType from, EncodingType to, int srcPaddingCount = 0) {
+            var baseFrom = (int)Math.Log((double)from, 2);
+            var baseTo = (int)Math.Log((double)to, 2);
+            var result = Execute(src, baseFrom, baseTo, srcPaddingCount);
+            return (result.Item1, result.Item2);
         }
 
-        public (byte[], int) EncodeBytes(byte[] src) {
-            var result = Execute(src, decodedBitGroupSize, encodedBitGroupSize);
-            return result;
+        public byte[] GetBytes(string text, EncodingType encodingType) {
+            
+            var (bytes, padding) = _mapper.Decode(text, encodingType);
+            return bytes;
+        }
+
+        public string GetString(byte[] bytes, EncodingType encodingType, int padding) {
+            var text = _mapper.Encode(bytes, encodingType, padding);
+            return text;
+        }
+        public string Convert(string text, EncodingType from, EncodingType to) {
+            var (bytes, padding) = _mapper.Decode(text, from);
+            var (resBytes, resPadding) = ConvertBytes(bytes, from, to, padding);
+            var resString = GetString(resBytes, to, resPadding);
+            return resString;
         }
     }
 }
