@@ -15,6 +15,13 @@ namespace xUtil.Encoding {
             Base64 = 64,
             Base128 = 128,
             Base256 = 256,
+
+            BIN = 2,
+            BINARY = 2,
+            OCT = 8,
+            OCTAL = 8,
+            HEX = 16,
+            ASCII = 256,
         }
 
         protected BaseMaps _mapper { get; set; }

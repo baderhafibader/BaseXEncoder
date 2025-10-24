@@ -76,7 +76,7 @@ namespace xUtil.Encoding {
         }
 
         public char Encode(byte value, EncodingType encodingType) => encodeMaps[(int)encodingType][value];
-        public byte Decode(char c, EncodingType encodingType) => c == '=' ? (byte)0 : decodeMaps[(int)encodingType][c];
+        public byte Decode(char c, EncodingType encodingType) => c == '=' && !decodeMaps[(int)encodingType].ContainsKey('=') ? (byte)0 : decodeMaps[(int)encodingType][c];
 
         public string Encode(byte[] values, EncodingType encodingType, int padding) {
             var sb = new System.Text.StringBuilder(values.Length);
@@ -95,7 +95,8 @@ namespace xUtil.Encoding {
             var paddingCount = 0;
             for (int i = 0; i < str.Length; i++) {
                 result.Add(Decode(str[i], encodingType));
-                if (str[i] == '=' && paddingCount > 0) {
+                if (decodeMaps[(int)encodingType].ContainsKey('=')) continue;
+                if (str[i] != '=' && paddingCount > 0) {
                     throw new NotSupportedException("Concatenated string not supported");
                 }
                 if (str[i] == '=') {
