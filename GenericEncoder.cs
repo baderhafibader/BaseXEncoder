@@ -1,5 +1,7 @@
+using Printer;
 using StaticUtil;
 using System;
+using System.Diagnostics;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace xUtil.Encoding {
@@ -20,7 +22,12 @@ namespace xUtil.Encoding {
             _mapper = new BaseMaps();
         }
 
-        protected (byte[], int) Execute(byte[] src, int from, int to, int destinationPaddingCount = 0) {
+        protected (byte[], int) Execute(byte[] src, EncodingType baseFrom, EncodingType baseto, int destinationPaddingCount = 0) {
+            
+
+            var from = (int)Math.Log((double)baseFrom, 2);
+            var to = (int)Math.Log((double)baseto, 2);
+
             var ratio = MathUtil.MinRatio(from, to);
             var paddingCount = (ratio.Item2 - (src.Length % ratio.Item2)) % ratio.Item2;
             var padding = new List<byte>();
@@ -28,27 +35,71 @@ namespace xUtil.Encoding {
             var srcBytes = src.Concat(padding).ToArray();
 
             var destBytes = new List<byte>();
+            Trace.WriteLine($"\n----------- Execute | from({from}), to({to}), destPad({destinationPaddingCount}), ratio({ratio.Item1}:{ratio.Item2}), srcPad({paddingCount}) -----------");
+            Trace.WriteLine($"src byte[]:");
+            Printer.BitPrinter.PrintBits(srcBytes, from);
 
             var buffer = 0;
             var bitCount = 0;
             var srcCounter = 0;
+            var bufferChange = 0;
+            var colors = new TerminalColor[] { TerminalColor.RED, TerminalColor.BLUE, TerminalColor.YELLOW, TerminalColor.GREEN};
 
             do {
-                if (bitCount <= to && srcCounter < srcBytes.Length) {
+                Trace.WriteLine($"\n----------- cycle -----------");
+                Trace.WriteLine($"buffer at cycle start:");
+                Printer.BitPrinter.PrintBits(
+                    new int[] { buffer },
+                    byteSize: from,
+                    (colors[(bufferChange + 0) % (colors.Length)], bitCount - to * 0),
+                    (colors[(bufferChange + 1) % (colors.Length)], bitCount - to * 1),
+                    (colors[(bufferChange + 2) % (colors.Length)], bitCount - to * 2),
+                    (colors[(bufferChange + 3) % (colors.Length)], bitCount - to * 3)
+                );
+                if (bitCount < to && srcCounter < srcBytes.Length) {
                     buffer = buffer << from;
                     buffer = buffer | srcBytes[srcCounter];
                     bitCount += from;
                     srcCounter++;
+                    Trace.WriteLine($"buffer AFTER taking new bits:");
+                    Printer.BitPrinter.PrintBits(
+                        new int[] { buffer },
+                        byteSize: from,
+                        (colors[(bufferChange + 0) % (colors.Length)], bitCount - to * 0),
+                        (colors[(bufferChange + 1) % (colors.Length)], bitCount - to * 1),
+                        (colors[(bufferChange + 2) % (colors.Length)], bitCount - to * 2),
+                        (colors[(bufferChange + 3) % (colors.Length)], bitCount - to * 3)
+                    );
                 }
 
                 if (bitCount >= to) {
                     var move = bitCount - to;
-                    destBytes.Add((byte)(buffer >> move));
+                    var byteToCopy = (byte)(buffer >> move);
+                    destBytes.Add(byteToCopy);
                     bitCount -= to;
+                    Trace.WriteLine($"dest bytes:");
+                    Printer.BitPrinter.PrintBits(
+                        new int[] { MathUtil.GetIntOfLast4Bytes(destBytes.ToArray())},
+                        byteSize: to,
+                        (colors[ (((destBytes.Count -1 + 4 ) % colors.Length) + colors.Length) % colors.Length], to *1 *((Math.Sign(destBytes.Count - 0) + 1) / 2)),
+                        (colors[ (((destBytes.Count -1 + 3 ) % colors.Length) + colors.Length) % colors.Length], to *2 *((Math.Sign(destBytes.Count - 1) + 1) / 2)),
+                        (colors[ (((destBytes.Count -1 + 2 ) % colors.Length) + colors.Length) % colors.Length], to *3 *((Math.Sign(destBytes.Count - 2) + 1) / 2)),
+                        (colors[ (((destBytes.Count -1 + 1 ) % colors.Length) + colors.Length) % colors.Length], to *4 *((Math.Sign(destBytes.Count - 3) + 1) / 2))
+
+                    );
                     var mask = (1 << bitCount) - 1;
                     buffer = buffer & mask;
+                    bufferChange++;
+                    Trace.WriteLine($"buffer AFTER taking new bits:");
+                    Printer.BitPrinter.PrintBits(
+                        new int[] { buffer },
+                        byteSize: from,
+                        (colors[(bufferChange + 0) % (colors.Length)], bitCount - to *0),
+                        (colors[(bufferChange + 1) % (colors.Length)], bitCount - to *1),
+                        (colors[(bufferChange + 2) % (colors.Length)], bitCount - to *2),
+                        (colors[(bufferChange + 3) % (colors.Length)], bitCount - to *3)
+                    );
                 }
-
             } while (bitCount > 0 || srcCounter < srcBytes.Length);
 
             destBytes = destBytes.Take(destBytes.Count() - destinationPaddingCount).ToList();
@@ -56,14 +107,12 @@ namespace xUtil.Encoding {
         }
 
         public (byte[], int) ConvertBytes(byte[] src, EncodingType from, EncodingType to, int srcPaddingCount = 0) {
-            var baseFrom = (int)Math.Log((double)from, 2);
-            var baseTo = (int)Math.Log((double)to, 2);
-            var result = Execute(src, baseFrom, baseTo, srcPaddingCount);
+
+            var result = Execute(src, from, to, srcPaddingCount);
             return (result.Item1, result.Item2);
         }
 
         public byte[] GetBytes(string text, EncodingType encodingType) {
-            
             var (bytes, padding) = _mapper.Decode(text, encodingType);
             return bytes;
         }
@@ -73,9 +122,22 @@ namespace xUtil.Encoding {
             return text;
         }
         public string Convert(string text, EncodingType from, EncodingType to) {
+            Trace.WriteLine(
+                $"\n==================================================================================================================\n" +
+                $"\t\t\tConvert '{text}', {from} to {to}" +
+                $"\n==================================================================================================================");
+
             var (bytes, padding) = _mapper.Decode(text, from);
+            Trace.WriteLine($"\n===========\ninput as byte[]: {bytes}, padding: {padding}");
+            
             var (resBytes, resPadding) = ConvertBytes(bytes, from, to, padding);
+            Trace.WriteLine($"\n===========\ninput as byte[]: {bytes}, padding: {padding}");
+            
             var resString = GetString(resBytes, to, resPadding);
+            Trace.WriteLine(
+                $"\n==================================================================================================================\n" +
+                $"\t\t\tConvert '\u001b[32m{text}\u001b[0m', {from} to {to}, result:\u001b[32m{resString}\u001b[0m" +
+                $"\n==================================================================================================================\n");
             return resString;
         }
     }
