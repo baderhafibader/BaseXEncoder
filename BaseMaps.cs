@@ -91,10 +91,10 @@ namespace xUtil.Encoding {
             return sb.ToString();
         }
         public (byte[], int) Decode(string str, EncodingType encodingType) {
-            var result = new byte[str.Length];
+            var result = new List<byte>();
             var paddingCount = 0;
             for (int i = 0; i < str.Length; i++) {
-                result[i] = Decode(str[i], encodingType);
+                result.Add(Decode(str[i], encodingType));
                 if (str[i] == '=' && paddingCount > 0) {
                     throw new NotSupportedException("Concatenated string not supported");
                 }
@@ -102,7 +102,7 @@ namespace xUtil.Encoding {
                     paddingCount++;
                 }
             }
-            return (result, paddingCount);
+            return (result.ToArray(), paddingCount);
         }
     }
 }
